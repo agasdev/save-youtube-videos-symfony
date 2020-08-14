@@ -2,8 +2,11 @@
 
 namespace App\Controller;
 
+use App\Classes\JwtAuth;
 use App\Entity\User;
+use DateTime;
 use Doctrine\ORM\EntityManagerInterface;
+use Exception;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -35,7 +38,7 @@ class UserController extends AbstractController
     }
 
     /**
-     * @Route("/register", name="", methods={"POST"})
+     * @Route("/register", name="register", methods={"POST"})
      *
      * @param Request $request
      * @param EntityManagerInterface $em
@@ -76,7 +79,7 @@ class UserController extends AbstractController
         $user->setSurname($surname);
         $user->setEmail($email);
         $user->setRole('ROLE_USER');
-        $user->setCreatedAt(new \DateTime());
+        $user->setCreatedAt(new DateTime());
         $user->setPassword(hash("sha256", $password));
 
         $issetUser = $em->getRepository(User::class)->findBy(["email" => $email]);
@@ -93,6 +96,57 @@ class UserController extends AbstractController
         return new JsonResponse([
             "status"  => "success",
             "message" => "User successfully registered"
+        ], Response::HTTP_OK);
+    }
+
+    /**
+     *
+     * @Route("/login", name="login", methods={"POST"})
+     *
+     * @param Request $request
+     * @param JwtAuth $jwtAuth
+     *
+     * @return JsonResponse
+     */
+    public function login(Request $request, JwtAuth $jwtAuth)
+    {
+        $params = json_decode($request->get('json', null));
+
+        if (!isset($params)) {
+            return new JsonResponse([
+                "status"  => "error",
+                "message" => "Params cannot be null"
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        $email    = !empty($params->email) ? $params->email : null;
+        $password = !empty($params->password) ? $params->password : null;
+        $getToken = !empty($params->getToken) ? $params->getToken : null;
+
+        $validator         = Validation::createValidator();
+        $validate_email    = $validator->validate($email, [new Email()]);
+        $validate_password = $validator->validate($password, [new NotBlank(), new NotNull()]);
+
+        if (count($validate_email) > 0 || count($validate_password) > 0) {
+            return new JsonResponse([
+                "status"  => "error",
+                "message" => "Params error"
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        try {
+            $user = $jwtAuth->signUp($email, $password, $getToken);
+        } catch (Exception $e) {
+            return new JsonResponse([
+                "status"  => "error",
+                "message" => $e->getMessage()
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        return new JsonResponse([
+            "status"  => "success",
+            "message" => "User successfully logged",
+            "data" => $user
         ], Response::HTTP_OK);
     }
 }
