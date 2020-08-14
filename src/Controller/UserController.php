@@ -20,7 +20,7 @@ use Symfony\Component\Validator\Validation;
 class UserController extends AbstractController
 {
     /**
-     * @Route("/user", name="user")
+     * @Route("/user", name="user", methods={"GET"})
      */
     public function index()
     {
@@ -146,7 +146,69 @@ class UserController extends AbstractController
         return new JsonResponse([
             "status"  => "success",
             "message" => "User successfully logged",
-            "data" => $user
+            "data"    => $user
+        ], Response::HTTP_OK);
+    }
+
+    /**
+     * @Route("/user", name="update_user", methods={"PUT"})
+     *
+     * @param Request $request
+     * @param JwtAuth $jwtAuth
+     * @param EntityManagerInterface $em
+     *
+     * @return JsonResponse
+     */
+    public function update(Request $request, JwtAuth $jwtAuth, EntityManagerInterface $em)
+    {
+        $jwt = $request->headers->get('Authorization');
+
+        if (!$jwtAuth->checkToken($jwt)) {
+            return new JsonResponse([
+                "status"  => "error",
+                "message" => "Authentication error"
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        $params   = json_decode($request->get('json', null));
+        $identity = $jwtAuth->checkToken($jwt, true);
+        $user     = $em->getRepository(User::class)->find($identity->sub);
+
+        $name    = !empty($params->name) ? $params->name : null;
+        $surname = !empty($params->surname) ? $params->surname : null;
+        $email   = !empty($params->email) ? $params->email : null;
+
+        $validator        = Validation::createValidator();
+        $validate_name    = $validator->validate($name, [new NotBlank(), new NotNull()]);
+        $validate_surname = $validator->validate($surname, [new NotBlank(), new NotNull()]);
+        $validate_email   = $validator->validate($email, [new Email()]);
+
+        if (count($validate_name) > 0 || count($validate_surname) > 0 || count($validate_email) > 0) {
+            return new JsonResponse([
+                "status"  => "error",
+                "message" => "Params error"
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        $user->setName($name);
+        $user->setSurname($surname);
+        $user->setEmail($email);
+
+        $issetUser = $em->getRepository(User::class)->findBy(["email" => $email]);
+        if ($issetUser && $identity->email !== $email) {
+            return new JsonResponse([
+                "status"  => "error",
+                "message" => "User email already exist"
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        $em->persist($user);
+        $em->flush();
+
+        return new JsonResponse([
+            "status" => "success",
+            "message" => "User successfully updated",
+            "user"   => $user
         ], Response::HTTP_OK);
     }
 }

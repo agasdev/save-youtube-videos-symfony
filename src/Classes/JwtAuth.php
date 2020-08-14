@@ -15,7 +15,7 @@ class JwtAuth
 
     public function __construct(EntityManagerInterface $em)
     {
-        $this->em = $em;
+        $this->em  = $em;
         $this->key = "KEY_BACK_SAVE_YOUTUBE_VIDEOS";
     }
 
@@ -24,14 +24,14 @@ class JwtAuth
      * @param $password
      * @param $getToken
      *
+     * @return object|string
      * @throws Exception
      *
-     * @return object|string
      */
     public function signUp($email, $password, $getToken)
     {
         $user = $this->em->getRepository(User::class)->findOneBy([
-            "email" => $email,
+            "email"    => $email,
             "password" => hash("sha256", $password)
         ]);
 
@@ -40,13 +40,13 @@ class JwtAuth
         }
 
         $token = [
-            'sub' => $user->getId(),
-            'name' => $user->getName(),
+            'sub'     => $user->getId(),
+            'name'    => $user->getName(),
             'surname' => $user->getSurname(),
-            'email' => $user->getEmail(),
-            'role' => $user->getRole(),
-            'iat' => time(),
-            'exp' => time() + (7 * 24 * 60 * 60),
+            'email'   => $user->getEmail(),
+            'role'    => $user->getRole(),
+            'iat'     => time(),
+            'exp'     => time() + (7 * 24 * 60 * 60),
         ];
 
         $jwt = JWT::encode($token, $this->key, 'HS256');
@@ -56,5 +56,32 @@ class JwtAuth
         }
 
         return JWT::decode($jwt, $this->key, ['HS256']);
+    }
+
+    /**
+     * @param $jwt
+     * @param bool $returnUser
+     *
+     * @return bool|object
+     */
+    public function checkToken($jwt, $returnUser = false)
+    {
+        $auth = false;
+
+        try {
+            $decoded = JWT::decode($jwt, $this->key, ['HS256']);
+        } catch (Exception $e) {
+            $auth = false;
+        }
+
+        if (isset($decoded) && isset($decoded->sub)) {
+            if ($returnUser) {
+                return $decoded;
+            }
+
+            $auth = true;
+        }
+
+        return $auth;
     }
 }
