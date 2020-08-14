@@ -161,13 +161,13 @@ class UserController extends AbstractController
      */
     public function update(Request $request, JwtAuth $jwtAuth, EntityManagerInterface $em)
     {
-        $jwt = $request->headers->get('Authorization');
+        $jwt = $request->headers->get('Authorization', null);
 
         if (!$jwtAuth->checkToken($jwt)) {
             return new JsonResponse([
                 "status"  => "error",
                 "message" => "Authentication error"
-            ], Response::HTTP_BAD_REQUEST);
+            ], Response::HTTP_FORBIDDEN);
         }
 
         $params   = json_decode($request->get('json', null));
