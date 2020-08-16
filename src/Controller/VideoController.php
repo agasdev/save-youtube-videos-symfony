@@ -22,14 +22,16 @@ class VideoController extends AbstractController
 
     /**
      * @Route("/video", name="new_video", methods={"POST"})
+     * @Route("/video/{id}", name="update_video", methods={"PUT"})
      *
      * @param Request $request
      * @param JwtAuth $jwtAuth
      * @param EntityManagerInterface $em
+     * @param null $id
      *
      * @return JsonResponse
      */
-    public function newVideo(Request $request, JwtAuth $jwtAuth, EntityManagerInterface $em)
+    public function newVideo(Request $request, JwtAuth $jwtAuth, EntityManagerInterface $em, $id = null)
     {
         $jwt = $request->headers->get('Authorization', null);
 
@@ -60,19 +62,39 @@ class VideoController extends AbstractController
 
         $user = $em->getRepository(User::class)->find($identity->sub);
 
-        $video = new Video();
-        $video->setUser($user);
-        $video->setTitle($title);
-        $video->setDescription($description);
-        $video->setUrl($url);
-        $video->setCreatedAt(new DateTime("now"));
+        if (isset($id)) {
+            $video = $em->getRepository(Video::class)->findOneBy(["id" => $id, "user" => $identity->sub]);
+
+            if (!$video) {
+                return new JsonResponse([
+                    "status"  => "error",
+                    "message" => "Video not found"
+                ], Response::HTTP_NOT_FOUND);
+            }
+
+            $video->setTitle($title);
+            $video->setDescription($description);
+            $video->setUrl($url);
+            $video->setUpdatedAt(new DateTime("now"));
+
+            $message = "updated";
+        } else {
+            $video = new Video();
+            $video->setUser($user);
+            $video->setTitle($title);
+            $video->setDescription($description);
+            $video->setUrl($url);
+            $video->setCreatedAt(new DateTime("now"));
+
+            $message = "saved";
+        }
 
         $em->persist($video);
         $em->flush();
 
         return new JsonResponse([
             "status"  => "success",
-            "message" => "Video successfully saved",
+            "message" => "Video successfully " . $message,
             "video"   => json_decode($this->get('serializer')->serialize($video, 'json'), true)
         ], Response::HTTP_OK);
     }
@@ -151,6 +173,46 @@ class VideoController extends AbstractController
         return new JsonResponse([
             "status" => "success",
             "video"  => json_decode($this->get('serializer')->serialize($video, 'json'), true),
+        ], Response::HTTP_OK);
+    }
+
+    /**
+     * @Route("/video/{id}", name="remove_video", methods={"DELETE"})
+     *
+     * @param Request $request
+     * @param JwtAuth $jwtAuth
+     * @param EntityManagerInterface $em
+     * @param $id
+     *
+     * @return JsonResponse
+     */
+    public function remove(Request $request, JwtAuth $jwtAuth, EntityManagerInterface $em, $id)
+    {
+        $jwt = $request->headers->get('Authorization', null);
+
+        if (!$jwtAuth->checkToken($jwt)) {
+            return new JsonResponse([
+                "status"  => "error",
+                "message" => "Authentication error"
+            ], Response::HTTP_FORBIDDEN);
+        }
+
+        $identity = $jwtAuth->checkToken($jwt, true);
+        $video    = $em->getRepository(Video::class)->findOneBy(["id" => $id, "user" => $identity->sub]);
+
+        if (!$video) {
+            return new JsonResponse([
+                "status"  => "error",
+                "message" => "Video not found"
+            ], Response::HTTP_NOT_FOUND);
+        }
+
+        $em->remove($video);
+        $em->flush();
+
+        return new JsonResponse([
+            "status" => "success",
+            "message"  => "The video has been deleted successfully",
         ], Response::HTTP_OK);
     }
 }
